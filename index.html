@@ -107,7 +107,21 @@
                         const thresholdMat = new cv.Mat();
                         cv.inRange(frame_hsv, low, high, thresholdMat);
 
-
+                        let contours = new cv.MatVector();
+                        let hierarchy = new cv.Mat();
+                        // You can try more different parameters
+                        cv.findContours(thresholdMat, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
+                        // draw contours with random Scalar
+                        for (let i = 0; i < contours.size(); ++i)
+                        {
+                            let color = new cv.Scalar(Math.round(Math.random() * 255), Math.round(Math.random() * 255),
+                                Math.round(Math.random() * 255));
+                            // cv.drawContours(frame, contours, i, color, 1, cv.LINE_8, hierarchy, 100);
+                            let M = cv.moments(contours.get(i), false);
+                            let cx = M.m10 / M.m00
+                            let cy = M.m01 / M.m00
+                            cv.circle(frame, new cv.Point(cx, cy), 1, color, 1);
+                        }
 
 
                         cv.imshow('canvasOutput', frame);
