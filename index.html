@@ -11,7 +11,7 @@
     <h2>Hello OpenCV.js</h2>
     <p id="status">OpenCV.js is loading...</p>
     <div>
-        <video id="videoInput" width="800" height="450" muted controls src="dedek.mp4"></video>
+        <video id="videoInput" width="800" height="450" muted controls src="test.mp4"></video>
 
     </div>
     <div>
@@ -31,10 +31,8 @@
 
 
 
-        function onOpenCvReady()
-        {
-            cv['onRuntimeInitialized'] = () =>
-            {
+        function onOpenCvReady() {
+            cv['onRuntimeInitialized'] = () => {
                 document.getElementById('status').innerHTML = 'OpenCV.js is ready.';
 
                 let video = document.getElementById('videoInput');
@@ -55,11 +53,16 @@
                 let Ss = [];
                 let Vs = [];
 
+                landmarks = [];
+                matched_landmarks = [];
 
-                canvas.addEventListener("click", function (event)
-                {
+
+                canvas.addEventListener("click", function (event) {
                     const x = event.clientX - canvas.offsetLeft + window.pageXOffset;
                     const y = event.clientY - canvas.offsetTop + window.pageYOffset;
+                    let point = { "x": x, "y": y }
+                    landmarks.push(point);
+                    // matched_landmarks.push(point);
                     // const ctx = canvas.getContext("2d");
                     // const pixelData = ctx.getImageData(x, y, 1, 1).data;
 
@@ -73,17 +76,16 @@
                     Ss = Ss.concat(S);
                     Vs = Vs.concat(V);
 
-                    console.log("Pixel value at (" + x + ", " + y + "): H:" + H + " S:" + S + " V: " + V);
+                    // console.log("Pixel value at (" + x + ", " + y + "): H:" + H + " S:" + S + " V: " + V);
+                    console.log(landmarks)
                     console.log(Hs)
                     console.log(Ss)
                     console.log(Vs)
 
                 });
 
-                function processVideo()
-                {
-                    try
-                    {
+                function processVideo() {
+                    try {
                         let begin = Date.now();
 
                         // start processing.
@@ -107,21 +109,52 @@
                         const thresholdMat = new cv.Mat();
                         cv.inRange(frame_hsv, low, high, thresholdMat);
 
+                        // let M = cv.Mat.ones(2, 2, cv.CV_8U);
+                        // let anchor = new cv.Point(-1, -1);
+                        // // You can try more different parameters
+                        // cv.erode(thresholdMat, thresholdMat, M, anchor, 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
+
                         let contours = new cv.MatVector();
                         let hierarchy = new cv.Mat();
                         // You can try more different parameters
                         cv.findContours(thresholdMat, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
                         // draw contours with random Scalar
-                        for (let i = 0; i < contours.size(); ++i)
-                        {
-                            let color = new cv.Scalar(Math.round(Math.random() * 255), Math.round(Math.random() * 255),
-                                Math.round(Math.random() * 255));
+                        let centroids = [];
+                        let color = new cv.Scalar(0, 255, 0, 255);
+                        for (let i = 0; i < contours.size(); ++i) {
+
                             // cv.drawContours(frame, contours, i, color, 1, cv.LINE_8, hierarchy, 100);
                             let M = cv.moments(contours.get(i), false);
                             let cx = M.m10 / M.m00
                             let cy = M.m01 / M.m00
-                            cv.circle(frame, new cv.Point(cx, cy), 1, color, 1);
+                            centroids.push({ "x": cx, "y": cy });
+                            cv.circle(frame, new cv.Point(cx, cy), 1, new cv.Scalar(255, 0, 0, 255), -1);
+
+
                         }
+                        // console.log(centroids.length)
+
+                        landmarks.forEach((point, landmark_idx) => {
+                            let x = point["x"];
+                            let y = point["y"];
+
+                            let min_dist = Number.MAX_SAFE_INTEGER;
+                            let min_centroid_idx;
+                            centroids.forEach((centroid, idx) => {
+                                let dist = Math.pow(x - centroid["x"], 2) + Math.pow(y - centroid["y"], 2);
+                                if (dist < min_dist) {
+                                    min_dist = dist;
+                                    min_centroid_idx = idx;
+                                }
+                            });
+                            if (min_centroid_idx != undefined) {
+                                let cx = centroids[min_centroid_idx]["x"];
+                                let cy = centroids[min_centroid_idx]["y"]
+                                landmarks[landmark_idx] = centroids[min_centroid_idx];
+                                centroids.splice(min_centroid_idx, 1)
+                                cv.circle(frame, new cv.Point(cx, cy), 3, color, -1);
+                            }
+                        });
 
 
                         cv.imshow('canvasOutput', frame);
@@ -133,8 +166,7 @@
                         high.delete();
                         thresholdMat.delete();
                         setTimeout(processVideo, delay);
-                    } catch (err)
-                    {
+                    } catch (err) {
                         console.error(err);
                     }
                 };
