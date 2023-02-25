@@ -11,7 +11,7 @@
     <h2>Hello OpenCV.js</h2>
     <p id="status">OpenCV.js is loading...</p>
     <div>
-        <video id="videoInput" width="800" height="450" muted controls src="test.mp4"></video>
+        <video id="videoInput" width="800" height="450" muted controls src="3.mp4"></video>
 
     </div>
     <div>
@@ -30,9 +30,35 @@
         const rect = canvas.getBoundingClientRect();
 
 
-
-        function onOpenCvReady() {
-            cv['onRuntimeInitialized'] = () => {
+        function MinIdx2d(arr, deleted_landmarks_idx, deleted_centroids_idx)
+        {
+            let min = Number.MAX_VALUE;
+            let min_idx;
+            arr.forEach((outer, outer_idx) =>
+            {
+                if (deleted_landmarks_idx.includes(outer_idx))
+                {
+                    return;
+                }
+                outer.forEach((inner, innerIdx) =>
+                {
+                    if (deleted_centroids_idx.includes(innerIdx))
+                    {
+                        return;
+                    }
+                    if (inner < min)
+                    {
+                        min = inner;
+                        min_idx = [outer_idx, innerIdx]
+                    }
+                });
+            });
+            return min_idx
+        }
+        function onOpenCvReady()
+        {
+            cv['onRuntimeInitialized'] = () =>
+            {
                 document.getElementById('status').innerHTML = 'OpenCV.js is ready.';
 
                 let video = document.getElementById('videoInput');
@@ -57,7 +83,8 @@
                 matched_landmarks = [];
 
 
-                canvas.addEventListener("click", function (event) {
+                canvas.addEventListener("click", function (event)
+                {
                     const x = event.clientX - canvas.offsetLeft + window.pageXOffset;
                     const y = event.clientY - canvas.offsetTop + window.pageYOffset;
                     let point = { "x": x, "y": y }
@@ -84,8 +111,10 @@
 
                 });
 
-                function processVideo() {
-                    try {
+                function processVideo()
+                {
+                    try
+                    {
                         let begin = Date.now();
 
                         // start processing.
@@ -121,40 +150,80 @@
                         // draw contours with random Scalar
                         let centroids = [];
                         let color = new cv.Scalar(0, 255, 0, 255);
-                        for (let i = 0; i < contours.size(); ++i) {
+                        for (let i = 0; i < contours.size(); ++i)
+                        {
 
                             // cv.drawContours(frame, contours, i, color, 1, cv.LINE_8, hierarchy, 100);
                             let M = cv.moments(contours.get(i), false);
+                            if (M.m00 == 0)
+                            {
+                                continue
+                            }
                             let cx = M.m10 / M.m00
                             let cy = M.m01 / M.m00
                             centroids.push({ "x": cx, "y": cy });
-                            cv.circle(frame, new cv.Point(cx, cy), 1, new cv.Scalar(255, 0, 0, 255), -1);
+                            cv.circle(frame, new cv.Point(cx, cy), 1, new cv.Scalar(0, 255, 0, 255), -1);
 
 
                         }
                         // console.log(centroids.length)
-
-                        landmarks.forEach((point, landmark_idx) => {
+                        landmark_dists = [];
+                        landmarks.forEach((point, landmark_idx) =>
+                        {
                             let x = point["x"];
                             let y = point["y"];
 
                             let min_dist = Number.MAX_SAFE_INTEGER;
                             let min_centroid_idx;
-                            centroids.forEach((centroid, idx) => {
+                            landmark_dists.push([])
+                            centroids.forEach((centroid, idx) =>
+                            {
                                 let dist = Math.pow(x - centroid["x"], 2) + Math.pow(y - centroid["y"], 2);
-                                if (dist < min_dist) {
-                                    min_dist = dist;
-                                    min_centroid_idx = idx;
-                                }
+                                landmark_dists[landmark_idx].push(dist);
+                                // if (dist < min_dist)
+                                // {
+                                //     min_dist = dist;
+                                //     min_centroid_idx = idx;
+                                // }
                             });
-                            if (min_centroid_idx != undefined) {
-                                let cx = centroids[min_centroid_idx]["x"];
-                                let cy = centroids[min_centroid_idx]["y"]
-                                landmarks[landmark_idx] = centroids[min_centroid_idx];
-                                centroids.splice(min_centroid_idx, 1)
-                                cv.circle(frame, new cv.Point(cx, cy), 3, color, -1);
-                            }
+                            // if (min_centroid_idx != undefined)
+                            // {
+                            //     let cx = centroids[min_centroid_idx]["x"];
+                            //     let cy = centroids[min_centroid_idx]["y"]
+                            //     landmarks[landmark_idx] = centroids[min_centroid_idx];
+                            //     centroids.splice(min_centroid_idx, 1)
+                            //     cv.circle(frame, new cv.Point(cx, cy), 3, color, -1);
+                            // }
                         });
+                        let deleted_landmarks_idx = [];
+                        let deleted_centroids_idx = [];
+
+                        while (landmark_dists.length > 0)
+                        {
+                            let min_idx = MinIdx2d(landmark_dists, deleted_landmarks_idx, deleted_centroids_idx);
+                            if (min_idx == undefined)
+                            {
+                                break;
+                            }
+                            let landmark_idx = min_idx[0];
+                            let min_centroid_idx = min_idx[1];
+
+                            deleted_landmarks_idx.push(landmark_idx);
+                            deleted_centroids_idx.push(min_centroid_idx);
+
+                            landmarks[landmark_idx] = centroids[min_centroid_idx];
+                            // landmark_dists.splice(landmark_idx, 1)
+                            // for (let index = 0; index < landmark_dists.length; index++)
+                            // {
+                            //     landmark_dists[index].splice(min_centroid_idx, 1);
+                            // }
+
+                            let cx = centroids[min_centroid_idx]["x"];
+                            let cy = centroids[min_centroid_idx]["y"]
+                            // cv.circle(frame, new cv.Point(cx, cy), 3, color, -1);
+
+
+                        }
 
 
                         cv.imshow('canvasOutput', frame);
@@ -166,7 +235,8 @@
                         high.delete();
                         thresholdMat.delete();
                         setTimeout(processVideo, delay);
-                    } catch (err) {
+                    } catch (err)
+                    {
                         console.error(err);
                     }
                 };
