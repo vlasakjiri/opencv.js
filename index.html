@@ -11,7 +11,7 @@
     <h2>Hello OpenCV.js</h2>
     <p id="status">OpenCV.js is loading...</p>
     <div>
-        <video id="videoInput" width="800" height="450" muted controls src="3.mp4"></video>
+        <video id="videoInput" width="800" height="450" muted controls src="2.mp4"></video>
 
     </div>
     <div>
@@ -194,8 +194,9 @@
                             // let x = point["x"];
                             // let y = point["y"];
 
-                            let x = point["x"] + kalman_predictions[landmark_idx].mean[2];
-                            let y = point["y"] + kalman_predictions[landmark_idx].mean[3];
+                            let x = point["x"] + kalman_predictions[landmark_idx].mean[2][0];
+                            let y = point["y"] + kalman_predictions[landmark_idx].mean[3][0];
+                            cv.circle(frame, new cv.Point(x, y), 5, colors[landmark_idx], -1);
 
                             let min_dist = Number.MAX_SAFE_INTEGER;
                             let min_centroid_idx;
@@ -251,7 +252,7 @@
 
                             let cx = centroids[min_centroid_idx]["x"];
                             let cy = centroids[min_centroid_idx]["y"]
-                            cv.circle(frame, new cv.Point(cx, cy), 5, colors[landmark_idx], -1);
+                            // cv.circle(frame, new cv.Point(cx, cy), 5, colors[landmark_idx], -1);
 
 
 
