@@ -11,7 +11,7 @@
     <h2>Hello OpenCV.js</h2>
     <p id="status">OpenCV.js is loading...</p>
     <div>
-        <video id="videoInput" width="800" height="450" muted controls src="2.mp4"></video>
+        <video id="videoInput" width="800" height="450" muted controls src="3.mp4"></video>
 
     </div>
     <div>
@@ -30,7 +30,7 @@
 
         const rect = canvas.getBoundingClientRect();
 
-
+        //find indices of minimal element in a 2d array
         function MinIdx2d(arr, deleted_landmarks_idx, deleted_centroids_idx)
         {
             let min = Number.MAX_VALUE;
@@ -80,20 +80,30 @@
                 let Ss = [];
                 let Vs = [];
 
+                //points to track
                 landmarks = [];
+                //kalman filter for each point
                 kalman_filters = [];
+                //correction for each point
                 kalman_previous_corrected = [];
+                //last prediction by kalman filter
                 kalman_predictions = [];
 
+                //track new point and save its H,S,V
                 canvas.addEventListener("click", function (event)
                 {
                     const x = event.clientX - canvas.offsetLeft + window.pageXOffset;
                     const y = event.clientY - canvas.offsetTop + window.pageYOffset;
                     let point = { "x": x, "y": y }
                     landmarks.push(point);
+                    // new kalman filter
                     kalman_filters.push(new KalmanFilter({
                         observation: 2,
-                        dynamic: 'constant-speed'
+                        dynamic: {
+                            name: 'constant-speed', // works better than constant-position and constant acceleration. idk why
+                            timeStep: 5, // works better than default 1 idk why
+                        }
+
                     }));
                     // matched_landmarks.push(point);
                     // const ctx = canvas.getContext("2d");
@@ -105,9 +115,10 @@
                     let S = frame_hsv.ucharAt(y, x * frame_hsv.channels() + 1);
                     let V = frame_hsv.ucharAt(y, x * frame_hsv.channels() + 2);
 
-                    Hs = Hs.concat(H);
-                    Ss = Ss.concat(S);
-                    Vs = Vs.concat(V);
+                    // save pixel hue, saturation and value
+                    Hs.push(H);
+                    Ss.push(S);
+                    Vs.push(V);
 
                     // console.log("Pixel value at (" + x + ", " + y + "): H:" + H + " S:" + S + " V: " + V);
                     console.log(landmarks)
@@ -136,13 +147,7 @@
                         cap.read(frame);
 
 
-                        // select good points
-                        // let keypoints = simpleBlobDetector(frame, { faster: true, filterByInertia: false })
-                        // for (const keypoint of keypoints)
-                        // {
-                        //     const center = new cv.Point(keypoint.pt.x, keypoint.pt.y)
-                        //     cv.circle(frame, center, keypoint.size, [255, 0, 0, 255], 3)
-                        // }
+
                         cv.cvtColor(frame, frame_hsv, cv.COLOR_RGB2HSV)
                         let low = new cv.Mat(frame_hsv.rows, frame_hsv.cols, frame_hsv.type(), [Math.min(...Hs) - 10, Math.min(...Ss, 100) - 5, Math.min(...Vs, 100) - 5, 0]);
                         let high = new cv.Mat(frame_hsv.rows, frame_hsv.cols, frame_hsv.type(), [Math.max(...Hs) + 10, 255, 255, 255]);
@@ -153,18 +158,20 @@
                         const thresholdMat = new cv.Mat();
                         cv.inRange(frame_hsv, low, high, thresholdMat);
 
+                        // erosion removed small but useful detections
                         let M = cv.Mat.ones(2, 2, cv.CV_8U);
                         let anchor = new cv.Point(-1, -1);
-                        // // You can try more different parameters
+
                         // cv.erode(thresholdMat, thresholdMat, M, anchor, 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
                         cv.dilate(thresholdMat, thresholdMat, M, anchor, 1, cv.BORDER_CONSTANT, cv.morphologyDefaultBorderValue());
 
 
+                        // find contours and centroids of contours
                         let contours = new cv.MatVector();
                         let hierarchy = new cv.Mat();
-                        // You can try more different parameters
                         cv.findContours(thresholdMat, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
-                        // draw contours with random Scalar
+
+                        // array of centroids of contours
                         let centroids = [];
                         let color = new cv.Scalar(0, 255, 0, 255);
                         for (let i = 0; i < contours.size(); ++i)
@@ -172,6 +179,7 @@
 
                             // cv.drawContours(frame, contours, i, color, 1, cv.LINE_8, hierarchy, 100);
                             let M = cv.moments(contours.get(i), false);
+                            // remove contours for which we cant compute centroid
                             if (M.m00 == 0)
                             {
                                 continue
@@ -179,24 +187,32 @@
                             let cx = M.m10 / M.m00
                             let cy = M.m01 / M.m00
                             centroids.push({ "x": cx, "y": cy });
+
+                            //draw centroid as a small green circle
                             cv.circle(frame, new cv.Point(cx, cy), 1, new cv.Scalar(0, 255, 0, 255), -1);
 
 
                         }
-                        // console.log(centroids.length)
 
+                        // compute distance between prediction for each point and all of the centroids
                         landmark_dists = [];
                         landmarks.forEach((point, landmark_idx) =>
                         {
+
                             kalman_predictions[landmark_idx] = kalman_filters[landmark_idx].predict({
                                 previousCorrected: kalman_previous_corrected[landmark_idx]
                             })
                             // let x = point["x"];
                             // let y = point["y"];
 
+                            // let x = kalman_predictions[landmark_idx].mean[0][0];
+                            // let y = kalman_predictions[landmark_idx].mean[1][0];
+
+                            // x and y of the prediction. this works better than just taking the mean prediction i think
                             let x = point["x"] + kalman_predictions[landmark_idx].mean[2][0];
                             let y = point["y"] + kalman_predictions[landmark_idx].mean[3][0];
                             cv.circle(frame, new cv.Point(x, y), 5, colors[landmark_idx], -1);
+                            // cv.circle(frame, new cv.Point(kalman_predictions[landmark_idx].mean[0][0], kalman_predictions[landmark_idx].mean[1][0]), 5, color, -1);
 
                             let min_dist = Number.MAX_SAFE_INTEGER;
                             let min_centroid_idx;
@@ -205,24 +221,13 @@
                             {
                                 let dist = Math.pow(x - centroid["x"], 2) + Math.pow(y - centroid["y"], 2);
                                 landmark_dists[landmark_idx].push(dist);
-                                // if (dist < min_dist)
-                                // {
-                                //     min_dist = dist;
-                                //     min_centroid_idx = idx;
-                                // }
                             });
-                            // if (min_centroid_idx != undefined)
-                            // {
-                            //     let cx = centroids[min_centroid_idx]["x"];
-                            //     let cy = centroids[min_centroid_idx]["y"]
-                            //     landmarks[landmark_idx] = centroids[min_centroid_idx];
-                            //     centroids.splice(min_centroid_idx, 1)
-                            //     cv.circle(frame, new cv.Point(cx, cy), 3, color, -1);
-                            // }
+
                         });
                         let deleted_landmarks_idx = [];
                         let deleted_centroids_idx = [];
 
+                        //take the point, that is nearest to a centroid and match it. repeat until there are no points to match
                         while (landmark_dists.length > 0)
                         {
                             let min_idx = MinIdx2d(landmark_dists, deleted_landmarks_idx, deleted_centroids_idx);
@@ -238,17 +243,17 @@
 
                             landmarks[landmark_idx] = centroids[min_centroid_idx];
 
-                            const correctedState = kalman_filters[landmark_idx].correct({
-                                predicted: kalman_predictions[landmark_idx],
-                                observation: [centroids[min_centroid_idx]["x"], centroids[min_centroid_idx]["y"]]
-                            });
-                            kalman_previous_corrected[landmark_idx] = correctedState;
+                            // only run correction if the video is playing
+                            if (!video.paused)
+                            {
+                                // run correction with the matched centroid
+                                const correctedState = kalman_filters[landmark_idx].correct({
+                                    predicted: kalman_predictions[landmark_idx],
+                                    observation: [centroids[min_centroid_idx]["x"], centroids[min_centroid_idx]["y"]]
+                                });
+                                kalman_previous_corrected[landmark_idx] = correctedState;
+                            }
 
-                            // landmark_dists.splice(landmark_idx, 1)
-                            // for (let index = 0; index < landmark_dists.length; index++)
-                            // {
-                            //     landmark_dists[index].splice(min_centroid_idx, 1);
-                            // }
 
                             let cx = centroids[min_centroid_idx]["x"];
                             let cy = centroids[min_centroid_idx]["y"]
