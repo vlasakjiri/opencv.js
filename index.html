@@ -199,9 +199,16 @@
                         landmarks.forEach((point, landmark_idx) =>
                         {
 
-                            kalman_predictions[landmark_idx] = kalman_filters[landmark_idx].predict({
-                                previousCorrected: kalman_previous_corrected[landmark_idx]
-                            })
+                            if (!video.paused)
+                            {
+                                kalman_predictions[landmark_idx] = kalman_filters[landmark_idx].predict({
+                                    previousCorrected: kalman_previous_corrected[landmark_idx]
+                                })
+                            }
+                            if (kalman_predictions[landmark_idx] === undefined)
+                            {
+                                return;
+                            }
                             // let x = point["x"];
                             // let y = point["y"];
 
@@ -211,7 +218,8 @@
                             // x and y of the prediction. this works better than just taking the mean prediction i think
                             let x = point["x"] + kalman_predictions[landmark_idx].mean[2][0];
                             let y = point["y"] + kalman_predictions[landmark_idx].mean[3][0];
-                            cv.circle(frame, new cv.Point(x, y), 5, colors[landmark_idx], -1);
+                            // draw a hollow circle for each prediction
+                            cv.circle(frame, new cv.Point(x, y), 5, colors[landmark_idx], 1);
                             // cv.circle(frame, new cv.Point(kalman_predictions[landmark_idx].mean[0][0], kalman_predictions[landmark_idx].mean[1][0]), 5, color, -1);
 
                             let min_dist = Number.MAX_SAFE_INTEGER;
@@ -257,7 +265,8 @@
 
                             let cx = centroids[min_centroid_idx]["x"];
                             let cy = centroids[min_centroid_idx]["y"]
-                            // cv.circle(frame, new cv.Point(cx, cy), 5, colors[landmark_idx], -1);
+                            //draw a full circle for each matched landmark
+                            cv.circle(frame, new cv.Point(cx, cy), 5, colors[landmark_idx], -1);
 
 
 
