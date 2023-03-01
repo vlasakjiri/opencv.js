@@ -209,6 +209,7 @@
                             cv.circle(frame, new cv.Point(x, y), 5, colors[landmark_idx], 1);
                             // cv.circle(frame, new cv.Point(kalman_predictions[landmark_idx].mean[0][0], kalman_predictions[landmark_idx].mean[1][0]), 5, color, -1);
 
+                            let next_point = landmarks[landmark_idx + 1];
                             let min_dist = Number.MAX_SAFE_INTEGER;
                             let min_centroid_idx;
                             centroids.forEach((centroid, idx) =>
@@ -216,7 +217,8 @@
                                 let dist = distance(x, centroid["x"], y, centroid["y"]);
                                 if (predicted_dist != undefined)
                                 {
-                                    dist += Math.pow(predicted_dist - dist, 2);
+                                    let realdist = distance(next_point["x"], centroid["x"], next_point["y"], centroid["y"]);
+                                    dist += Math.pow(predicted_dist - realdist, 2);
                                 }
                                 if (dist < min_dist)
                                 {
