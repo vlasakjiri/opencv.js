@@ -30,31 +30,10 @@
 
         const rect = canvas.getBoundingClientRect();
 
-        //find indices of minimal element in a 2d array
-        function MinIdx2d(arr, deleted_landmarks_idx, deleted_centroids_idx)
+
+        function distance(x1, x2, y1, y2)
         {
-            let min = Number.MAX_VALUE;
-            let min_idx;
-            arr.forEach((outer, outer_idx) =>
-            {
-                if (deleted_landmarks_idx.includes(outer_idx))
-                {
-                    return;
-                }
-                outer.forEach((inner, innerIdx) =>
-                {
-                    if (deleted_centroids_idx.includes(innerIdx))
-                    {
-                        return;
-                    }
-                    if (inner < min)
-                    {
-                        min = inner;
-                        min_idx = [outer_idx, innerIdx]
-                    }
-                });
-            });
-            return min_idx
+            return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2));
         }
         function onOpenCvReady()
         {
@@ -70,7 +49,7 @@
                 let frame_hsv = new cv.Mat(video.height, video.width, cv.CV_8UC4);
 
 
-                const FPS = 60;
+                const FPS = 30;
 
                 // schedule the first one.
                 setTimeout(processVideo, 0);
@@ -81,30 +60,40 @@
                 let Vs = [];
 
                 //points to track
-                landmarks = [];
-                //kalman filter for each point
-                kalman_filters = [];
-                //correction for each point
-                kalman_previous_corrected = [];
-                //last prediction by kalman filter
-                kalman_predictions = [];
+                let landmarks = [];
+                let predicted_dists = [];
+                // //kalman filter for each point
+                // kalman_filters = [];
+                // //correction for each point
+                // kalman_previous_corrected = [];
+                // //last prediction by kalman filter
+                // kalman_predictions = [];
 
                 //track new point and save its H,S,V
                 canvas.addEventListener("click", function (event)
                 {
                     const x = event.clientX - canvas.offsetLeft + window.pageXOffset;
                     const y = event.clientY - canvas.offsetTop + window.pageYOffset;
+
+                    if (landmarks.length > 0)
+                    {
+                        let prev_point = landmarks.at(-1);
+                        predicted_dist = distance(prev_point["x"], x, prev_point["y"], y)
+                        predicted_dists.push(predicted_dist);
+                    }
+
                     let point = { "x": x, "y": y }
+
                     landmarks.push(point);
                     // new kalman filter
-                    kalman_filters.push(new KalmanFilter({
-                        observation: 2,
-                        dynamic: {
-                            name: 'constant-speed', // works better than constant-position and constant acceleration. idk why
-                            timeStep: 5, // works better than default 1 idk why
-                        }
+                    // kalman_filters.push(new KalmanFilter({
+                    //     observation: 2,
+                    //     dynamic: {
+                    //         name: 'constant-speed', // works better than constant-position and constant acceleration. idk why
+                    //         timeStep: 5, // works better than default 1 idk why
+                    //     }
 
-                    }));
+                    // }));
                     // matched_landmarks.push(point);
                     // const ctx = canvas.getContext("2d");
                     // const pixelData = ctx.getImageData(x, y, 1, 1).data;
@@ -121,10 +110,11 @@
                     Vs.push(V);
 
                     // console.log("Pixel value at (" + x + ", " + y + "): H:" + H + " S:" + S + " V: " + V);
+                    console.log(point)
                     console.log(landmarks)
-                    console.log(Hs)
-                    console.log(Ss)
-                    console.log(Vs)
+                    // console.log(Hs)
+                    // console.log(Ss)
+                    // console.log(Vs)
 
                 });
                 let colors = [];
@@ -195,82 +185,57 @@
                         }
 
                         // compute distance between prediction for each point and all of the centroids
-                        landmark_dists = [];
-                        landmarks.forEach((point, landmark_idx) =>
+                        for (let landmark_idx = landmarks.length - 1; landmark_idx >= 0; landmark_idx--)
                         {
+                            const point = landmarks[landmark_idx];
+                            let x = point["x"];
+                            let y = point["y"];
 
-                            if (!video.paused)
+                            let predicted_dist;
+                            if (landmark_idx < landmarks.length - 1)
                             {
-                                kalman_predictions[landmark_idx] = kalman_filters[landmark_idx].predict({
-                                    previousCorrected: kalman_previous_corrected[landmark_idx]
-                                })
+                                // let next_point = landmarks[landmark_idx + 1];
+                                // predicted_dist = distance(next_point["x"], x, next_point["y"], y)
+                                predicted_dist = predicted_dists[landmark_idx];
                             }
-                            if (kalman_predictions[landmark_idx] === undefined)
-                            {
-                                return;
-                            }
-                            // let x = point["x"];
-                            // let y = point["y"];
 
                             // let x = kalman_predictions[landmark_idx].mean[0][0];
                             // let y = kalman_predictions[landmark_idx].mean[1][0];
 
                             // x and y of the prediction. this works better than just taking the mean prediction i think
-                            let x = point["x"] + kalman_predictions[landmark_idx].mean[2][0];
-                            let y = point["y"] + kalman_predictions[landmark_idx].mean[3][0];
+                            // let x = point["x"] + kalman_predictions[landmark_idx].mean[2][0];
+                            // let y = point["y"] + kalman_predictions[landmark_idx].mean[3][0];
                             // draw a hollow circle for each prediction
                             cv.circle(frame, new cv.Point(x, y), 5, colors[landmark_idx], 1);
                             // cv.circle(frame, new cv.Point(kalman_predictions[landmark_idx].mean[0][0], kalman_predictions[landmark_idx].mean[1][0]), 5, color, -1);
 
                             let min_dist = Number.MAX_SAFE_INTEGER;
                             let min_centroid_idx;
-                            landmark_dists.push([])
                             centroids.forEach((centroid, idx) =>
                             {
-                                let dist = Math.pow(x - centroid["x"], 2) + Math.pow(y - centroid["y"], 2);
-                                landmark_dists[landmark_idx].push(dist);
+                                let dist = distance(x, centroid["x"], y, centroid["y"]);
+                                if (predicted_dist != undefined)
+                                {
+                                    dist += Math.pow(predicted_dist - dist, 2);
+                                }
+                                if (dist < min_dist)
+                                {
+                                    min_dist = dist;
+                                    min_centroid_idx = idx;
+                                }
                             });
-
-                        });
-                        let deleted_landmarks_idx = [];
-                        let deleted_centroids_idx = [];
-
-                        //take the point, that is nearest to a centroid and match it. repeat until there are no points to match
-                        while (landmark_dists.length > 0)
-                        {
-                            let min_idx = MinIdx2d(landmark_dists, deleted_landmarks_idx, deleted_centroids_idx);
-                            if (min_idx == undefined)
-                            {
-                                break;
-                            }
-                            let landmark_idx = min_idx[0];
-                            let min_centroid_idx = min_idx[1];
-
-                            deleted_landmarks_idx.push(landmark_idx);
-                            deleted_centroids_idx.push(min_centroid_idx);
-
                             landmarks[landmark_idx] = centroids[min_centroid_idx];
-
-                            // only run correction if the video is playing
-                            if (!video.paused)
-                            {
-                                // run correction with the matched centroid
-                                const correctedState = kalman_filters[landmark_idx].correct({
-                                    predicted: kalman_predictions[landmark_idx],
-                                    observation: [centroids[min_centroid_idx]["x"], centroids[min_centroid_idx]["y"]]
-                                });
-                                kalman_previous_corrected[landmark_idx] = correctedState;
-                            }
-
 
                             let cx = centroids[min_centroid_idx]["x"];
                             let cy = centroids[min_centroid_idx]["y"]
+
+                            centroids.splice(min_centroid_idx, 1);
+
                             //draw a full circle for each matched landmark
                             cv.circle(frame, new cv.Point(cx, cy), 5, colors[landmark_idx], -1);
-
-
-
                         }
+
+
 
 
                         cv.imshow('canvasOutput', frame);
