@@ -21,9 +21,7 @@
         <canvas id="canvasBlack" width="800" height="450"></canvas>
     </div>
     <script async src="opencv.js" onload="onOpenCvReady();" type="text/javascript"></script>
-    <script src="kalman-filter.js"></script>
     <script>
-        var { KalmanFilter } = kalmanFilter;
 
         const canvas = document.getElementById("canvasOutput");
         const canvasBlack = document.getElementById("canvasBlack");
@@ -31,14 +29,11 @@
         const rect = canvas.getBoundingClientRect();
 
 
-        function distance(x1, x2, y1, y2)
-        {
+        function distance(x1, x2, y1, y2) {
             return Math.sqrt(Math.pow(x1 - x2, 2) + Math.pow(y1 - y2, 2));
         }
-        function onOpenCvReady()
-        {
-            cv['onRuntimeInitialized'] = () =>
-            {
+        function onOpenCvReady() {
+            cv['onRuntimeInitialized'] = () => {
                 document.getElementById('status').innerHTML = 'OpenCV.js is ready.';
 
                 let video = document.getElementById('videoInput');
@@ -62,21 +57,13 @@
                 //points to track
                 let landmarks = [];
                 let predicted_dists = [];
-                // //kalman filter for each point
-                // kalman_filters = [];
-                // //correction for each point
-                // kalman_previous_corrected = [];
-                // //last prediction by kalman filter
-                // kalman_predictions = [];
 
                 //track new point and save its H,S,V
-                canvas.addEventListener("click", function (event)
-                {
+                canvas.addEventListener("click", function (event) {
                     const x = event.clientX - canvas.offsetLeft + window.pageXOffset;
                     const y = event.clientY - canvas.offsetTop + window.pageYOffset;
 
-                    if (landmarks.length > 0)
-                    {
+                    if (landmarks.length > 0) {
                         let prev_point = landmarks.at(-1);
                         predicted_dist = distance(prev_point["x"], x, prev_point["y"], y)
                         predicted_dists.push(predicted_dist);
@@ -85,15 +72,7 @@
                     let point = { "x": x, "y": y }
 
                     landmarks.push(point);
-                    // new kalman filter
-                    // kalman_filters.push(new KalmanFilter({
-                    //     observation: 2,
-                    //     dynamic: {
-                    //         name: 'constant-speed', // works better than constant-position and constant acceleration. idk why
-                    //         timeStep: 5, // works better than default 1 idk why
-                    //     }
 
-                    // }));
                     // matched_landmarks.push(point);
                     // const ctx = canvas.getContext("2d");
                     // const pixelData = ctx.getImageData(x, y, 1, 1).data;
@@ -117,9 +96,10 @@
                     // console.log(Vs)
 
                 });
+
+                
                 let colors = [];
-                for (let index = 0; index < 20; index++)
-                {
+                for (let index = 0; index < 20; index++) {
                     colors.push(new cv.Scalar(parseInt(Math.random() * 255), parseInt(Math.random() * 255),
                         parseInt(Math.random() * 255), 255))
 
@@ -127,10 +107,8 @@
 
 
 
-                function processVideo()
-                {
-                    try
-                    {
+                function processVideo() {
+                    try {
                         let begin = Date.now();
 
                         // start processing.
@@ -164,14 +142,12 @@
                         // array of centroids of contours
                         let centroids = [];
                         let color = new cv.Scalar(0, 255, 0, 255);
-                        for (let i = 0; i < contours.size(); ++i)
-                        {
+                        for (let i = 0; i < contours.size(); ++i) {
 
                             // cv.drawContours(frame, contours, i, color, 1, cv.LINE_8, hierarchy, 100);
                             let M = cv.moments(contours.get(i), false);
                             // remove contours for which we cant compute centroid
-                            if (M.m00 == 0)
-                            {
+                            if (M.m00 == 0) {
                                 continue
                             }
                             let cx = M.m10 / M.m00
@@ -185,15 +161,13 @@
                         }
 
                         // compute distance between prediction for each point and all of the centroids
-                        for (let landmark_idx = landmarks.length - 1; landmark_idx >= 0; landmark_idx--)
-                        {
+                        for (let landmark_idx = landmarks.length - 1; landmark_idx >= 0; landmark_idx--) {
                             const point = landmarks[landmark_idx];
                             let x = point["x"];
                             let y = point["y"];
 
                             let predicted_dist;
-                            if (landmark_idx < landmarks.length - 1)
-                            {
+                            if (landmark_idx < landmarks.length - 1) {
                                 // let next_point = landmarks[landmark_idx + 1];
                                 // predicted_dist = distance(next_point["x"], x, next_point["y"], y)
                                 predicted_dist = predicted_dists[landmark_idx];
@@ -212,16 +186,13 @@
                             let next_point = landmarks[landmark_idx + 1];
                             let min_dist = Number.MAX_SAFE_INTEGER;
                             let min_centroid_idx;
-                            centroids.forEach((centroid, idx) =>
-                            {
+                            centroids.forEach((centroid, idx) => {
                                 let dist = distance(x, centroid["x"], y, centroid["y"]);
-                                if (predicted_dist != undefined)
-                                {
+                                if (predicted_dist != undefined) {
                                     let realdist = distance(next_point["x"], centroid["x"], next_point["y"], centroid["y"]);
                                     dist += Math.pow(predicted_dist - realdist, 2);
                                 }
-                                if (dist < min_dist)
-                                {
+                                if (dist < min_dist) {
                                     min_dist = dist;
                                     min_centroid_idx = idx;
                                 }
@@ -249,8 +220,7 @@
                         high.delete();
                         thresholdMat.delete();
                         setTimeout(processVideo, delay);
-                    } catch (err)
-                    {
+                    } catch (err) {
                         console.error(err);
                     }
                 };
